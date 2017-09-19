@@ -1,0 +1,28 @@
+repositories:
+    - webapp
+    - api.*
+default_branch: develop
+protected_branch:
+    - develop
+    - master
+labels:
+    - name: Code Reviewed
+      color: 0e8a16
+    - name: Feature Reviewed
+      color: 0e8a16
+    - name: No Tests Approved
+      color: 0052cc
+    - name: Not ready to be merged
+      color: e11d21
+    - name: Performance Optimization
+      color: bfd4f2
+    - name: Ready for review
+      color: c2e0c6
+    - name: Rebase Needed
+      color: f9d0c4
+    - name: Tests Needed
+      color: eb6420
+    - name: Waiting API PR
+      color: e11d21
+    - name: Work In Progress
+      color: fbca04

@@ -1,0 +1,170 @@
+<div id="app">
+    <div class="container-fluid">
+
+        <div class="form-row">
+            <div class="col col-md-3">
+                <div class="form-group">
+                    <label>GITHUB USERNAME</label>
+                    <input class="form-control" placeholder="GITHUB USERNAME" v-model="username" size="15">
+                </div>
+            </div>
+            <div class="col col-md-3">
+                <div class="form-group">
+                    <label>
+                        GITHUB TOKEN
+                        <i v-if="isTokenValid" class="fa fa-check-circle" aria-hidden="true"></i>
+                        <span v-if="token && !isTokenValid">
+                            <i class="fa fa-exclamation-triangle" aria-hidden="true"></i>
+                        </span>
+                    </label>
+                    <input class="form-control" placeholder="GITHUB TOKEN" v-model="token" size="15">
+                </div>
+            </div>
+        </div>
+
+        <div class="row" v-if="isTokenValid">
+                <div class="col col-md-4">
+                    <button @click="updateRepositories">
+                        Update Repos
+                        <span v-if="loading.repositories">
+                            <i class="fa fa-spinner fa-pulse"></i>
+                        </span>
+                    </button>
+                    <button @click="updateConfig">
+                        Update configs
+                        <span v-if="loading.configs">
+                            <i class="fa fa-spinner fa-pulse"></i>
+                        </span>
+                    </button>
+                    <div>
+                        <div class="cta" @click="updateVisibility('all')">Total repos: ${this.repositories.length}</div>
+                        <div>Config repos: ${this.filteredRepositories.length}</div>
+                        <div class="cta" @click="updateVisibility('valid')">Valid repos: ${this.validRepositories.length}</div>
+                        <div class="cta" @click="updateVisibility('invalid')">Invalid repos: ${this.invalidRepositories.length}</div>
+                    </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col col-md-3">
+                <br />
+                <div class="card">
+                    <div class="card-header">
+                        Configuration -
+                        <select v-model="selectedConfig">
+                            <option val="">-</option>
+                            <option :val="name" v-for="(val, name) in configs">${name}</option>
+                        </select>
+                    </div>
+                    <div class="card-body">
+                        <div>
+                            Repositories:
+                            <ul>
+                                <li v-for="repo in config.repositories">${repo}</li>
+                            </ul>
+                        </div>
+                        <div>
+                            Default branch: ${config.default_branch}
+                        </div>
+                        <div class="labels">
+                            Labels: <br/>
+                            <div class="label" v-for="label in config.labels" :style="labelStyle(label)">
+                                ${label.name}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col col-md-9" v-if="isTokenValid">
+                <div class="row">
+                    <div class="col col-md-5" v-for="repository in filteredRepositories">
+                        <div class="card">
+                            <div class="card-header">
+                                <a :href="repository.html_url">${repository.full_name}</a>
+                                <button class="btn btn-sm btn-primary pull-right" @click="reloadRepository(repository)">
+                                    <i class="fa fa-refresh"
+                                        aria-hidden="true"
+                                        :class="{ 'fa-pulse': loading.repo[repository.id] }"></i>
+                                </button>
+                                <span v-if="!repository.isValid">
+                                    <i class="fa fa-exclamation-triangle" aria-hidden="true"></i>
+                                </span>
+                            </div>
+                            <div class="card-body">
+                                <div>
+                                    Default branch:
+                                    <span :style="{color: repository.validations.default_branch? 'green' : 'red' }">
+                                        ${repository.default_branch}
+                                    </span>
+                                    <span v-if="!repository.validations.default_branch"
+                                        @click="setDefaultBranch(repository)"
+                                        class="cta">
+                                        <i class="fa fa-exclamation-triangle" aria-hidden="true" title="Fix me!"></i>
+                                    </span>
+                                </div>
+                                <div class="labels">
+                                    <a :href="repository.html_url + '/labels'">Labels</a>
+                                    <span v-if="!repository.validations.labels"
+                                        @click="setLabels(repository)"
+                                        class="cta">
+                                        <i class="fa fa-exclamation-triangle" aria-hidden="true" title="Fix me!"></i>
+                                    </span>
+                                    : <br/>
+                                    <div class="label" v-for="label in repository.labels" :style="labelStyle(label)">
+                                        ${label.name}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+
+<style>
+body {
+    font-size: 14px;
+}
+.labels ul {
+    list-style-type: none;
+    margin: 0;
+    padding: 0;
+}
+
+.card {
+    margin-top: 5px;
+}
+.card-header {
+    padding: 0.15rem 1.25rem;
+}
+
+.col {
+    padding-right: 5px;
+    padding-left: 10px;
+}
+.label {
+    display: inline-block;
+    padding: 0 10px;
+    margin-right: 5px;
+    margin-bottom: 5px;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 2;
+    text-align: center;
+    border-radius: 3px;
+    border: 1px solid transparent;
+}
+
+.fa-exclamation-triangle {
+    color: #A00;
+}
+
+.cta {
+    cursor: pointer;
+}
+</style>

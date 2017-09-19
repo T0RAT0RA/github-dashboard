@@ -2,9 +2,14 @@ repositories:
     - webapp
     - api.*
 default_branch: develop
-protected_branch:
+protected_branches:
     - develop
     - master
+protection:
+    required_pull_request_reviews: true
+    dismiss_stale_reviews: true
+    require_code_owner_reviews: true
+    enforce_admins: false
 labels:
     - name: Code Reviewed
       color: 0e8a16

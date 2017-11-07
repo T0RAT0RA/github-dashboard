@@ -125,11 +125,15 @@
                                   </td>
                                   <td class="protected-branches"
                                       :class="{
-                                        'success': repository.validations.protected_branches,
-                                        'danger': !repository.validations.protected_branches,
+                                        'success': repository.validations.protected_branches.isValid,
+                                        'danger': !repository.validations.protected_branches.isValid,
                                       }">
-                                      <span v-for="(protection, branch) in repository.protected_branches"
-                                        >{{branch}}</span>
+                                      <div v-for="(protection, branch) in repository.protected_branches" :title="JSON.stringify(repository.validations.protected_branches[branch], null, 2)">
+                                          <a :href="repository.html_url + '/settings/branches/' + branch"
+                                          >{{branch}}</a>:
+                                          <span v-if="!repository.loading && repository.validations.protected_branches[branch].isValid" class="glyphicon glyphicon-ok" aria-hidden="true"></span>
+                                          <span v-if="!repository.loading && !repository.validations.protected_branches[branch].isValid" class="glyphicon glyphicon-remove" aria-hidden="true"></span>
+                                      </div>
                                   </td>
                                   <td :class="{
                                         'success': repository.validations.labels,
@@ -318,8 +322,11 @@ export default {
             this.$store.state.gh
                 .getOrganization(this.selectedOrganization)
                 .getRepos()
+                // .getRepo(this.selectedOrganization, 'php-config')
+                // .getDetails()
                 .then((resp) => {
                     self.repositories = resp.data.reduce((repos, r) => {
+                    // self.repositories = [resp.data].reduce((repos, r) => {
                         r.loading = true;
                         r.labels = [];
                         r.protected_branches = {};
@@ -410,9 +417,30 @@ export default {
                    default_branch: repository.default_branch == this.$store.state.config.default_branch,
                    labels: repository.labels?
                         _.isEqual(_.map(this.$store.state.config.labels, (l) => _.pick(l, ['name', 'color'])), _.map(repository.labels, (l) => _.pick(l, ['name', 'color']))) : false,
-                    protected_branches: true,
+                    protected_branches: {
+                        isValid: true,
+                    },
                 };
-                repository.isValid = !Object.values(repository.validations).filter((v) => { return !v; }).length >= 1
+
+                for (let branch in repository.protected_branches) {
+                    let config = repository.protected_branches[branch];
+                    if (!config) { continue; }
+                    let branchValidation = {
+                        isValid: true,
+                        //required_pull_request_reviews: config.required_pull_request_reviews && config.required_pull_request_reviews.dismiss_stale_reviews,
+                        enforce_admins: config.enforce_admins && config.enforce_admins.enabled == this.$store.state.config.protection.enforce_admins,
+                        dismiss_stale_reviews: config.required_pull_request_reviews && config.required_pull_request_reviews.dismiss_stale_reviews == this.$store.state.config.protection.dismiss_stale_reviews,
+                        require_code_owner_reviews: config.required_pull_request_reviews && config.required_pull_request_reviews.require_code_owner_reviews == this.$store.state.config.protection.require_code_owner_reviews,
+                    };
+
+                    repository.validations.protected_branches[branch] = branchValidation;
+                    repository.validations.protected_branches[branch].isValid = this.hasOnlyTrueValues(branchValidation);
+                }
+                repository.validations.protected_branches.isValid = this.hasOnlyTrueValues(repository.validations.protected_branches);
+                repository.isValid = this.hasOnlyTrueValues(repository.validations);
+        },
+        hasOnlyTrueValues: function(o) {
+            return Object.values(o).every((v) => { if (v instanceof Object) {return this.hasOnlyTrueValues(v);} return v === true; })
         },
         labelStyle: function(label) {
             return {
@@ -433,6 +461,7 @@ export default {
             Promise.all([
                 this.fixDefaultBranch(repository),
                 this.fixLabels(repository),
+                this.fixProtection(repository),
             ]).then(() => {
                 repository.loading = false;
                 this.getRateLimit();
@@ -452,6 +481,44 @@ export default {
                     repository.default_branch = resp.data.default_branch;
                     this.validateRepository(repository);
                 })
+        },
+        fixProtection: function(repository) {
+            //Do not fix protection if valid
+            if (repository.validations.protected_branches.isValid) {
+                return Promise.resolve();
+            }
+
+            let promises = [];
+            for (let branchName in repository.protected_branches) {
+                let branch = repository.protected_branches[branchName];
+                if (repository.validations.protected_branches[branchName].isValid) {
+                    continue;
+                }
+
+                promises.push(this.$store.state.gh
+                    .getRepo(this.selectedOrganization, repository.name)
+                    .updateBranchProtection(branchName, {
+                        required_status_checks: {
+                            strict: false,
+                            contexts: []
+                        },
+                        required_pull_request_reviews: {
+                            dismiss_stale_reviews: this.$store.state.config.protection.dismiss_stale_reviews,
+                            require_code_owner_reviews: this.$store.state.config.protection.require_code_owner_reviews,
+                        },
+                        restrictions: null,
+                        enforce_admins: this.$store.state.config.protection.enforce_admins,
+                    }).then((resp) => {
+                        repository.protected_branches[branchName] = resp.data;
+                    })
+                );
+            }
+            return new Promise((resolve, reject) => {
+                Promise.all(promises).then(() => {
+                   this.validateRepository(repository);
+                   resolve();
+               });
+           });
         },
         fixLabels: function(repository) {
             //Do not fix labels if valid
@@ -515,7 +582,7 @@ export default {
                                 'color': label.color,
                             })
                     );
-                });;
+                });
 
             //To Delete
             labelUpdates['delete'].map((label) => {
@@ -523,10 +590,7 @@ export default {
                         this.$store.state.gh.getIssues(this.selectedOrganization, repository.name)
                             .deleteLabel(label.name)
                     );
-                });;
-
-
-            ;
+                });
 
             return new Promise((resolve, reject) => {
                 Promise.all(promises).then(() => {
@@ -542,21 +606,14 @@ export default {
 </script>
 
 <style lang="less" rel="stylesheet/less">
-.label {
-    margin: 0 2px;
-    display: inline-block;
-    white-space: nowrap;
-}
 .filters {
     span.selected {
         font-weight: bold;
     }
 }
 .repositories {
-    .status {
-        .glyphicon-ok { color: #080; }
-        .glyphicon-remove { color: #800; }
-    }
+    .glyphicon-ok { color: #080; }
+    .glyphicon-remove { color: #800; }
     .tools {
         button { margin-right: 1px; padding: 0px 5px; }
     }
